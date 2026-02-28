@@ -40,7 +40,7 @@ from flask import Flask, render_template_string, request, jsonify, Response, mak
 try:
     from history import HistoryDB, HistoryCollector
     _HAS_HISTORY = True
-except Import错误:
+except ImportError:
     _HAS_HISTORY = False
     HistoryDB = None
     HistoryCollector = None
@@ -54,7 +54,7 @@ try:
     from opentelemetry.proto.collector.metrics.v1 import metrics_service_pb2
     from opentelemetry.proto.collector.trace.v1 import trace_service_pb2
     _HAS_OTEL_PROTO = True
-except Import错误:
+except ImportError:
     metrics_service_pb2 = None
     trace_service_pb2 = None
 
@@ -75,7 +75,7 @@ def _grep_log_file(filepath, pattern):
             for _line in _f:
                 if _re.search(pattern, _line, _re.IGNORECASE):
                     results.append(_line.rstrip('\n'))
-    except (OS错误, IO错误):
+    except (OSError, IOError):
         pass
     return results
 
@@ -86,10 +86,10 @@ def _tail_lines(filepath, n=200):
         with open(filepath, 'rb') as _f:
             try:
                 _f.seek(-min(n * 500, fsize), 2)
-            except OS错误:
+            except OSError:
                 _f.seek(0)
             return _f.read().decode('utf-8', errors='replace').splitlines()[-n:]
-    except (OS错误, IO错误):
+    except (OSError, IOError):
         return []
 
 def _get_log_dirs():
@@ -175,19 +175,19 @@ def _load_metrics_from_disk():
                     metrics_store[key] = data[key][-MAX_STORE_ENTRIES:]
             _otel_last_received = data.get('_last_received', 0)
         _expire_old_entries()
-    except json.JSONDecode错误 as e:
-        print(f"⚠️  警告: Failed to parse metrics file {path}: {e}")
+    except json.JSONDecodeError as e:
+        print(f"⚠️  Warning: Failed to parse metrics file {path}: {e}")
         # Create backup of corrupted file
         backup_path = f"{path}.corrupted.{int(time.time())}"
         try:
             os.rename(path, backup_path)
             print(f"💾 Corrupted file backed up to {backup_path}")
-        except OS错误:
+        except OSError:
             pass
-    except (IO错误, OS错误) as e:
-        print(f"⚠️  警告: Failed to read metrics file {path}: {e}")
+    except (IOError, OSError) as e:
+        print(f"⚠️  Warning: Failed to read metrics file {path}: {e}")
     except Exception as e:
-        print(f"⚠️  警告: Unexpected error loading metrics: {e}")
+        print(f"⚠️  Warning: Unexpected error loading metrics: {e}")
 
 
 def _save_metrics_to_disk():
@@ -207,14 +207,14 @@ def _save_metrics_to_disk():
         with open(tmp, 'w') as f:
             json.dump(data, f)
         os.replace(tmp, path)
-    except OS错误 as e:
-        print(f"⚠️  警告: Failed to save metrics to {path}: {e}")
+    except OSError as e:
+        print(f"⚠️  Warning: Failed to save metrics to {path}: {e}")
         if "No space left on device" in str(e):
             print("💾 Disk full! Consider cleaning up old files or expanding storage.")
-    except json.JSONEncode错误 as e:
-        print(f"⚠️  警告: Failed to serialize metrics data: {e}")
+    except json.JSONEncodeError as e:
+        print(f"⚠️  Warning: Failed to serialize metrics data: {e}")
     except Exception as e:
-        print(f"⚠️  警告: Unexpected error saving metrics: {e}")
+        print(f"⚠️  Warning: Unexpected error saving metrics: {e}")
 
 
 def _expire_old_entries():
@@ -256,7 +256,7 @@ def _metrics_flush_loop():
             print("📊 Metrics flush loop shutting down...")
             break
         except Exception as e:
-            print(f"⚠️  警告: 错误 in metrics flush loop: {e}")
+            print(f"⚠️  Warning: Error in metrics flush loop: {e}")
             # Continue running despite errors
 
 
@@ -366,7 +366,7 @@ def _fleet_maintenance_loop():
             _fleet_update_statuses()
             _fleet_prune_metrics()
         except Exception as e:
-            print(f"警告: Fleet maintenance error: {e}")
+            print(f"Warning: Fleet maintenance error: {e}")
 
 
 def _start_fleet_maintenance_thread():
@@ -441,7 +441,7 @@ def _get_budget_config():
                 elif isinstance(defaults[k], (int, float)):
                     try:
                         defaults[k] = float(v)
-                    except Value错误:
+                    except ValueError:
                         pass
                 else:
                     defaults[k] = v
@@ -529,7 +529,7 @@ def _budget_check():
         spent = status[f'{period}_spent']
         pct = (spent / limit * 100) if limit > 0 else 0
 
-        # 警告 alert
+        # Warning alert
         if pct >= warning_pct and pct < pause_pct:
             _fire_alert(
                 rule_id=f'budget_{period}_warning',
@@ -560,7 +560,7 @@ def _pause_gateway():
         subprocess.run(['openclaw', 'gateway', 'stop'], timeout=10,
                        capture_output=True)
         return
-    except (FileNotFound错误, subprocess.TimeoutExpired, subprocess.Subprocess错误):
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.SubprocessError):
         pass
     # Fallback: SIGSTOP to gateway process (Unix only)
     if sys.platform != 'win32':
@@ -583,7 +583,7 @@ def _resume_gateway():
     try:
         subprocess.run(['openclaw', 'gateway', 'start'], timeout=10,
                        capture_output=True)
-    except (FileNotFound错误, subprocess.TimeoutExpired, subprocess.Subprocess错误):
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.SubprocessError):
         pass
     # Also try SIGCONT (Unix only)
     if sys.platform != 'win32':
@@ -629,7 +629,7 @@ def _fire_alert(rule_id, alert_type, message, channels=None):
             db.commit()
             db.close()
     except Exception as e:
-        print(f"警告: Failed to save alert history: {e}")
+        print(f"Warning: Failed to save alert history: {e}")
 
     # Send to channels
     for ch in channels:
@@ -661,7 +661,7 @@ def _send_telegram_alert(message):
             urllib.request.urlopen(req, timeout=10)
             return
     except Exception as e:
-        print(f"警告: Direct Telegram alert failed: {e}")
+        print(f"Warning: Direct Telegram alert failed: {e}")
     # Fallback: send through gateway
     try:
         _gw_invoke('message', {
@@ -819,7 +819,7 @@ def _budget_monitor_loop():
                                 })
 
         except Exception as e:
-            print(f"警告: Budget monitor error: {e}")
+            print(f"Warning: Budget monitor error: {e}")
 
 
 def _start_budget_monitor_thread():
@@ -1083,11 +1083,11 @@ def _safe_date_ts(date_str):
         return 0
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').timestamp()
-    except Value错误:
+    except ValueError:
         # Invalid date format - expected but handled gracefully
         return 0
     except Exception as e:
-        print(f"⚠️  警告: Unexpected error parsing date '{date_str}': {e}")
+        print(f"⚠️  Warning: Unexpected error parsing date '{date_str}': {e}")
         return 0
 
 
@@ -1129,7 +1129,7 @@ def validate_configuration():
     # Check if OpenClaw binary is available
     try:
         subprocess.run(['openclaw', '--version'], capture_output=True, timeout=10)
-    except (subprocess.TimeoutExpired, FileNotFound错误, subprocess.Subprocess错误):
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
         warnings.append("⚠️  OpenClaw binary not found in PATH")
         tips.append("💡 Install OpenClaw: https://github.com/openclaw/openclaw")
     
@@ -1302,7 +1302,7 @@ def _detect_workspace_from_config():
                 ws = data.get("workspace") or data.get("workspaceDir")
                 if ws:
                     return os.path.expanduser(ws)
-        except (FileNotFound错误, json.JSONDecode错误, Key错误):
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
             pass
     return None
 
@@ -1314,7 +1314,7 @@ def _detect_gateway_port():
     if env_port:
         try:
             return int(env_port)
-        except Value错误:
+        except ValueError:
             pass
     # Try reading from gateway config
     # Try JSON configs first (openclaw.json / moltbot.json / clawdbot.json)
@@ -1332,7 +1332,7 @@ def _detect_gateway_port():
             gw = cfg.get('gateway', {})
             if isinstance(gw, dict) and 'port' in gw:
                 return int(gw['port'])
-        except (FileNotFound错误, Value错误, Key错误, Type错误):
+        except (FileNotFoundError, ValueError, KeyError, TypeError):
             pass
     # Try YAML configs
     yaml_paths = [
@@ -1349,7 +1349,7 @@ def _detect_gateway_port():
                     if line.startswith('port:'):
                         port_val = line.split(':', 1)[1].strip()
                         return int(port_val)
-        except (FileNotFound错误, Value错误, Index错误):
+        except (FileNotFoundError, ValueError, IndexError):
             pass
     return 18789  # Default OpenClaw gateway port
 
@@ -1373,7 +1373,7 @@ def _detect_gateway_token():
                     for entry in env_data.split('\0'):
                         if entry.startswith('OPENCLAW_GATEWAY_TOKEN='):
                             return entry.split('=', 1)[1]
-                except (Permission错误, FileNotFound错误):
+                except (PermissionError, FileNotFoundError):
                     pass
     except Exception:
         pass
@@ -1393,7 +1393,7 @@ def _detect_gateway_token():
             auth = gw.get('auth', {})
             if isinstance(auth, dict) and 'token' in auth:
                 return auth['token']
-        except (FileNotFound错误, Value错误, Key错误, Type错误):
+        except (FileNotFoundError, ValueError, KeyError, TypeError):
             pass
     return None
 
@@ -1412,7 +1412,7 @@ def _detect_disk_mounts():
                     if (mount_point.startswith('/mnt/') or mount_point.startswith('/data')) and \
                        fs_type not in ('tmpfs', 'devtmpfs', 'proc', 'sysfs', 'cgroup', 'cgroup2'):
                         mounts.append(mount_point)
-    except (IO错误, OS错误):
+    except (IOError, OSError):
         pass
     return mounts
 
@@ -1435,11 +1435,11 @@ def get_local_ip():
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except (socket.error, OS错误) as e:
+    except (socket.error, OSError) as e:
         # Network unavailable or socket error - common in offline/restricted environments
         return "127.0.0.1"
     except Exception as e:
-        print(f"⚠️  警告: Unexpected error getting local IP: {e}")
+        print(f"⚠️  Warning: Unexpected error getting local IP: {e}")
         return "127.0.0.1"
 
 
@@ -1899,7 +1899,7 @@ DASHBOARD_HTML = r"""
   .usage-table td { padding: 8px 12px; font-size: 13px; color: var(--text-secondary); border-bottom: 1px solid var(--border-secondary); }
   .usage-table tr:last-child td { border-bottom: none; font-weight: 700; color: var(--text-accent); }
   
-  /* === Cost 警告s === */
+  /* === Cost Warnings === */
   .cost-warning { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
   /* === Markdown Rendered Content === */
   .md-rendered h1,.md-rendered h2,.md-rendered h3,.md-rendered h4 { margin: 8px 0 4px; color: var(--text-primary); }
@@ -2452,7 +2452,7 @@ function clawmetryLogout(){
     <div class="nav-tab active" onclick="switchTab('overview')">Overview</div>
     <div class="nav-tab" onclick="switchTab('crons')">Crons</div>
     <div class="nav-tab" onclick="switchTab('usage')">Tokens</div>
-    <div class="nav-tab" onclick="switchTab('memory')">记忆</div>
+    <div class="nav-tab" onclick="switchTab('memory')">Memory</div>
     <!-- History tab hidden until mature -->
     <!-- <div class="nav-tab" onclick="switchTab('history')">History</div> -->
   </div>
@@ -2495,7 +2495,7 @@ function clawmetryLogout(){
           <input id="budget-monthly" type="number" step="0.01" min="0" style="width:100%;padding:8px 12px;border:1px solid var(--border-primary);border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);font-size:14px;">
         </div>
         <div>
-          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">警告 at (%)</label>
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">Warning at (%)</label>
           <input id="budget-warn-pct" type="number" step="1" min="1" max="100" value="80" style="width:100%;padding:8px 12px;border:1px solid var(--border-primary);border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);font-size:14px;">
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -2506,7 +2506,7 @@ function clawmetryLogout(){
       </div>
       <div id="budget-status-display" style="margin-top:16px;padding:12px;background:var(--bg-secondary);border:1px solid var(--border-primary);border-radius:8px;">
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Current Spending</div>
-        <div id="budget-status-content" style="font-size:13px;color:var(--text-secondary);">加载中...</div>
+        <div id="budget-status-content" style="font-size:13px;color:var(--text-secondary);">Loading...</div>
       </div>
     </div>
     <!-- Alert Rules Tab -->
@@ -2532,7 +2532,7 @@ function clawmetryLogout(){
           </div>
         </div>
       </div>
-      <div id="alert-rules-list" style="font-size:13px;color:var(--text-secondary);">加载中...</div>
+      <div id="alert-rules-list" style="font-size:13px;color:var(--text-secondary);">Loading...</div>
     </div>
     <!-- Telegram Tab -->
     <div id="budget-tab-telegram" style="display:none;">
@@ -2557,7 +2557,7 @@ function clawmetryLogout(){
     </div>
     <!-- History Tab -->
     <div id="budget-tab-history" style="display:none;">
-      <div id="alert-history-list" style="font-size:13px;color:var(--text-secondary);max-height:400px;overflow-y:auto;">加载中...</div>
+      <div id="alert-history-list" style="font-size:13px;color:var(--text-secondary);max-height:400px;overflow-y:auto;">Loading...</div>
     </div>
   </div>
 </div>
@@ -2568,7 +2568,7 @@ function clawmetryLogout(){
     <button class="refresh-btn" onclick="loadAll()" style="padding:4px 12px;font-size:12px;">↻</button>
     <span class="pulse"></span>
     <span class="live-badge">LIVE</span>
-    <span class="refresh-time" id="refresh-time" style="font-size:11px;">加载中...</span>
+    <span class="refresh-time" id="refresh-time" style="font-size:11px;">Loading...</span>
   </div>
 
   <!-- Stats Bar (top) -->
@@ -2592,7 +2592,7 @@ function clawmetryLogout(){
         <div class="stats-footer-label">Model</div>
         <div class="stats-footer-value" id="model-primary">—</div>
       </div>
-      <div id="model-breakdown" style="display:none;">加载中...</div>
+      <div id="model-breakdown" style="display:none;">Loading...</div>
     </div>
     <div class="stats-footer-item">
       <span class="stats-footer-icon">📊</span>
@@ -2605,10 +2605,10 @@ function clawmetryLogout(){
     <div class="stats-footer-item">
       <span class="stats-footer-icon">💬</span>
       <div>
-        <div class="stats-footer-label">会话</div>
+        <div class="stats-footer-label">Sessions</div>
         <div class="stats-footer-value" id="hot-sessions-count">—</div>
       </div>
-      <div id="hot-sessions-list" style="display:none;">加载中...</div>
+      <div id="hot-sessions-list" style="display:none;">Loading...</div>
     </div>
   </div>
 
@@ -2665,7 +2665,7 @@ function clawmetryLogout(){
         <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">🏥 System Health</div>
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);font-weight:600;margin-bottom:6px;">Services</div>
         <div id="sh-services" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;"></div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);font-weight:600;margin-bottom:6px;">磁盘使用</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);font-weight:600;margin-bottom:6px;">Disk Usage</div>
         <div id="sh-disks" style="margin-bottom:14px;"></div>
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);font-weight:600;margin-bottom:6px;">Cron Jobs</div>
         <div id="sh-crons" style="margin-bottom:14px;"></div>
@@ -2699,13 +2699,13 @@ function clawmetryLogout(){
     <button class="refresh-btn" onclick="exportUsageData()" style="margin-left: 8px;">📥 Export CSV</button>
   </div>
   
-  <!-- Cost 警告s -->
+  <!-- Cost Warnings -->
   <div id="cost-warnings" style="display:none; margin-bottom: 16px;"></div>
   
   <!-- Main Usage Stats -->
   <div class="grid">
     <div class="card">
-      <div class="card-title"><span class="icon">📊</span> 今天</div>
+      <div class="card-title"><span class="icon">📊</span> Today</div>
       <div class="card-value" id="usage-today">—</div>
       <div class="card-sub" id="usage-today-cost"></div>
     </div>
@@ -2727,10 +2727,10 @@ function clawmetryLogout(){
   </div>
   <div class="section-title">📊 Token Usage (14 days)</div>
   <div class="card">
-    <div class="usage-chart" id="usage-chart">加载中...</div>
+    <div class="usage-chart" id="usage-chart">Loading...</div>
   </div>
   <div class="section-title">💰 Cost Breakdown <span id="usage-cost-info-icon" class="tooltip-info-icon" style="display:none;">i</span></div>
-  <div class="card"><table class="usage-table" id="usage-cost-table"><tbody><tr><td colspan="3" style="color:#666;">加载中...</td></tr></tbody></table></div>
+  <div class="card"><table class="usage-table" id="usage-cost-table"><tbody><tr><td colspan="3" style="color:#666;">Loading...</td></tr></tbody></table></div>
   <div id="otel-extra-sections" style="display:none;">
     <div class="grid" style="margin-top:16px;">
       <div class="card">
@@ -2756,7 +2756,7 @@ function clawmetryLogout(){
     <button class="refresh-btn" onclick="loadCrons()">&#x21bb; Refresh</button>
     <!-- New Cron Job button disabled until gateway CRUD is properly tested -->
   </div>
-  <div class="card" id="crons-list">加载中...</div>
+  <div class="card" id="crons-list">Loading...</div>
 </div>
 
 <!-- Cron Edit/Create Modal -->
@@ -2805,7 +2805,7 @@ function clawmetryLogout(){
   <div class="refresh-bar">
     <button class="refresh-btn" onclick="loadMemory()">↻ Refresh</button>
   </div>
-  <div class="card" id="memory-list">加载中...</div>
+  <div class="card" id="memory-list">Loading...</div>
   <div class="file-viewer" id="file-viewer">
     <div class="file-viewer-header">
       <span class="file-viewer-title" id="file-viewer-title"></span>
@@ -2821,7 +2821,7 @@ function clawmetryLogout(){
     <button class="refresh-btn" onclick="loadTranscripts()">↻ Refresh</button>
     <button class="refresh-btn" id="transcript-back-btn" style="display:none" onclick="showTranscriptList()">← Back to list</button>
   </div>
-  <div class="card" id="transcript-list">加载中...</div>
+  <div class="card" id="transcript-list">Loading...</div>
   <div id="transcript-viewer" style="display:none">
     <div class="transcript-viewer-meta" id="transcript-meta"></div>
     <div class="chat-messages" id="transcript-messages"></div>
@@ -2864,12 +2864,12 @@ function clawmetryLogout(){
   <!-- Sessions & Crons side by side -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
     <div class="card" style="padding:16px;">
-      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0 0 12px 0;">活跃会话</h3>
+      <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0 0 12px 0;">Active Sessions</h3>
       <canvas id="history-sessions-chart" height="160"></canvas>
     </div>
     <div class="card" style="padding:16px;">
       <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0 0 12px 0;">Cron Runs</h3>
-      <div id="history-cron-table" style="max-height:300px;overflow-y:auto;font-size:13px;color:var(--text-secondary);">加载中...</div>
+      <div id="history-cron-table" style="max-height:300px;overflow-y:auto;font-size:13px;color:var(--text-secondary);">Loading...</div>
     </div>
   </div>
 
@@ -3188,7 +3188,7 @@ async function loadBudgetStatus() {
       if(limit > 0) html += ' / $' + limit.toFixed(2) + ' (' + pct.toFixed(0) + '%)';
       html += '</span></div>';
     }
-    row('今天', s.daily_spent, s.daily_limit, s.daily_pct);
+    row('Today', s.daily_spent, s.daily_limit, s.daily_pct);
     row('This Week', s.weekly_spent, s.weekly_limit, s.weekly_pct);
     row('This Month', s.monthly_spent, s.monthly_limit, s.monthly_pct);
     if(s.paused) {
@@ -3507,7 +3507,7 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
   var to = setTimeout(function() { ctrl.abort('timeout'); }, timeoutMs);
   try {
     var r = await fetch(url, {signal: ctrl.signal});
-    if (!r.ok) throw new 错误('HTTP ' + r.status);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
   } finally {
     clearTimeout(to);
@@ -3639,7 +3639,7 @@ async function loadMiniWidgets(overview, usage) {
       badgeEl.style.display = 'none';
       badgeEl.textContent = '';
     }
-    trendEl.textContent = trend || '今天\'s running total';
+    trendEl.textContent = trend || 'Today\'s running total';
     trendEl.style.display = trend ? '' : 'none';
   }
 
@@ -3749,7 +3749,7 @@ async function loadSubAgents() {
     
   } catch(e) {
     document.getElementById('subagents-count').textContent = '?';
-    document.getElementById('subagents-status').textContent = '错误 loading sub-agents';
+    document.getElementById('subagents-status').textContent = 'Error loading sub-agents';
     document.getElementById('subagents-preview').innerHTML = '<div style="color:#e74c3c;font-size:11px;">Failed to load workforce</div>';
   }
 }
@@ -3949,7 +3949,7 @@ async function loadActivityStream() {
     
     document.getElementById('activity-stream').innerHTML = html;
   } catch(e) {
-    document.getElementById('activity-stream').innerHTML = '<div style="color:#666;">错误 loading activity stream</div>';
+    document.getElementById('activity-stream').innerHTML = '<div style="color:#666;">Error loading activity stream</div>';
   }
 }
 
@@ -4083,10 +4083,10 @@ async function loadSAActivity(sessionId) {
         html += '<span style="font-size:11px;color:#aaa;font-family:monospace;word-break:break-all;">' + escHtml(evt.input) + '</span>';
         html += '</div>';
       } else if (evt.type === 'tool_result') {
-        var resultColor = evt.is错误 ? '#e04040' : '#2a5a3a';
+        var resultColor = evt.isError ? '#e04040' : '#2a5a3a';
         html += '<div style="display:flex;gap:8px;padding:4px 16px 4px 24px;align-items:flex-start;">';
         html += '<span style="font-size:10px;color:#555;min-width:55px;font-family:monospace;">' + time + '</span>';
-        html += '<span style="font-size:10px;color:' + (evt.is错误 ? '#e04040' : '#555') + ';min-width:80px;">' + (evt.is错误 ? '❌ error' : '✓ result') + '</span>';
+        html += '<span style="font-size:10px;color:' + (evt.isError ? '#e04040' : '#555') + ';min-width:80px;">' + (evt.isError ? '❌ error' : '✓ result') + '</span>';
         html += '<span style="font-size:10px;color:#666;font-family:monospace;max-height:40px;overflow:hidden;word-break:break-all;">' + escHtml((evt.preview || '').substring(0, 200)) + '</span>';
         html += '</div>';
       } else if (evt.type === 'thinking') {
@@ -4230,7 +4230,7 @@ function renderLogs(elId, lines) {
       if (ts) display = '<span class="ts">' + ts + '</span> ' + escHtml(display);
       else display = escHtml(display);
     } catch(e) {
-      if (l.includes('错误') || l.includes('failed')) cls = 'err';
+      if (l.includes('Error') || l.includes('failed')) cls = 'err';
       else if (l.includes('WARN')) cls = 'warn';
       display = escHtml(l.substring(0, 300));
     }
@@ -4247,11 +4247,11 @@ async function viewFile(path) {
   var title = document.getElementById('file-viewer-title');
   var content = document.getElementById('file-viewer-content');
   title.textContent = path;
-  content.textContent = '加载中...';
+  content.textContent = 'Loading...';
   viewer.style.display = 'block';
   try {
     var data = await fetch('/api/file?path=' + encodeURIComponent(path)).then(r => r.json());
-    if (data.error) { content.textContent = '错误: ' + data.error; return; }
+    if (data.error) { content.textContent = 'Error: ' + data.error; return; }
     content.textContent = data.content;
   } catch(e) {
     content.textContent = 'Failed to load: ' + e.message;
@@ -4349,11 +4349,11 @@ function renderCrons() {
     html += '<div class="cron-name">' + escHtml(j.name || j.id) + '</div>';
     html += '<span class="cron-status ' + badgeClass + '">' + badgeLabel + '</span>';
     if (status === 'error') {
-      var errMsg = (j.state && j.state.last错误) ? escHtml(j.state.last错误) : 'Unknown error';
+      var errMsg = (j.state && j.state.lastError) ? escHtml(j.state.lastError) : 'Unknown error';
       var errTime = (j.state && j.state.lastRunAtMs) ? new Date(j.state.lastRunAtMs).toLocaleString() : 'Unknown';
       var consecutiveFails = (j.state && j.state.consecutiveFailures) ? j.state.consecutiveFailures : '';
       html += '<span class="cron-error-actions">';
-      html += '<span class="cron-info-icon" title="错误 details" onclick="event.stopPropagation();showCron错误(this,\'' + errMsg.replace(/'/g,'\\&#39;').replace(/"/g,'&quot;') + '\',\'' + escHtml(errTime) + '\',' + (consecutiveFails||'null') + ')">&#x2139;&#xFE0F;</span>';
+      html += '<span class="cron-info-icon" title="Error details" onclick="event.stopPropagation();showCronError(this,\'' + errMsg.replace(/'/g,'\\&#39;').replace(/"/g,'&quot;') + '\',\'' + escHtml(errTime) + '\',' + (consecutiveFails||'null') + ')">&#x2139;&#xFE0F;</span>';
       html += '<button class="cron-fix-btn" onclick="event.stopPropagation();confirmCronFix(\'' + escHtml(j.id) + '\',\'' + escHtml(j.name||j.id).replace(/'/g,'\\&#39;') + '\')">&#x1F527; Fix</button>';
       html += '</span>';
     }
@@ -4378,8 +4378,8 @@ function renderCrons() {
     // Expanded section
     if (expanded) {
       html += '<div class="cron-expand" id="cron-expand-' + escHtml(j.id) + '">';
-      if (j.state && j.state.last错误) {
-        html += '<div style="color:var(--text-error);margin-bottom:6px;"><strong>Last error:</strong> ' + escHtml(j.state.last错误) + '</div>';
+      if (j.state && j.state.lastError) {
+        html += '<div style="color:var(--text-error);margin-bottom:6px;"><strong>Last error:</strong> ' + escHtml(j.state.lastError) + '</div>';
       }
       html += '<div id="cron-runs-' + escHtml(j.id) + '">Loading run history...</div>';
       if (j.payload || j.config) {
@@ -4441,21 +4441,21 @@ async function cronRunNow(jobId) {
     var data = await res.json();
     showCronToast(data.message || 'Job triggered');
     setTimeout(loadCrons, 2000);
-  } catch(e) { showCronToast('错误: ' + e.message); }
+  } catch(e) { showCronToast('Error: ' + e.message); }
 }
 
 async function cronToggle(jobId, enabled) {
   try {
     var res = await fetch('/api/cron/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({jobId: jobId, enabled: enabled})});
     var data = await res.json();
-    if (data.error) { showCronToast('错误: ' + data.error); return; }
+    if (data.error) { showCronToast('Error: ' + data.error); return; }
     showCronToast(data.message || (enabled ? 'Job enabled' : 'Job disabled'));
     // Update local state immediately for instant UI feedback
     var job = _cronJobs.find(function(j) { return j.id === jobId; });
     if (job) { job.enabled = enabled; renderCrons(); }
     // Then refresh from server after a short delay
     setTimeout(loadCrons, 1000);
-  } catch(e) { showCronToast('错误: ' + e.message); }
+  } catch(e) { showCronToast('Error: ' + e.message); }
 }
 
 function cronConfirmDelete(jobId, jobName) {
@@ -4473,7 +4473,7 @@ async function cronDelete(jobId) {
     showCronToast(data.message || 'Job deleted');
     delete _cronExpanded[jobId];
     loadCrons();
-  } catch(e) { showCronToast('错误: ' + e.message); }
+  } catch(e) { showCronToast('Error: ' + e.message); }
 }
 
 function cronEdit(jobId) {
@@ -4554,11 +4554,11 @@ async function saveCronEdit() {
     try {
       var res = await fetch('/api/cron/create', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
       var data = await res.json();
-      if (data.error) { showCronToast('错误: ' + data.error); return; }
+      if (data.error) { showCronToast('Error: ' + data.error); return; }
       showCronToast(data.message || 'Job created');
       closeCronEditModal();
       loadCrons();
-    } catch(e) { showCronToast('错误: ' + e.message); }
+    } catch(e) { showCronToast('Error: ' + e.message); }
   } else {
     var patch = { enabled: enabled };
     if (name) patch.name = name;
@@ -4572,11 +4572,11 @@ async function saveCronEdit() {
       showCronToast(data.message || 'Job updated');
       closeCronEditModal();
       loadCrons();
-    } catch(e) { showCronToast('错误: ' + e.message); }
+    } catch(e) { showCronToast('Error: ' + e.message); }
   }
 }
 
-function showCron错误(el, msg, ts, fails) {
+function showCronError(el, msg, ts, fails) {
   // Remove any existing popover
   var old = document.querySelector('.cron-error-popover');
   if (old) old.remove();
@@ -4586,7 +4586,7 @@ function showCron错误(el, msg, ts, fails) {
   pop.style.top = (rect.bottom + 8) + 'px';
   pop.style.left = Math.min(rect.left, window.innerWidth - 420) + 'px';
   var h = '<span class="ep-close" onclick="this.parentElement.remove()">&times;</span>';
-  h += '<div class="ep-label">错误 Message</div><div class="ep-value">' + msg + '</div>';
+  h += '<div class="ep-label">Error Message</div><div class="ep-value">' + msg + '</div>';
   h += '<div class="ep-label">Failed At</div><div class="ep-value ts">' + ts + '</div>';
   if (fails) h += '<div class="ep-label">Consecutive Failures</div><div class="ep-value">' + fails + '</div>';
   pop.innerHTML = h;
@@ -4613,7 +4613,7 @@ async function submitCronFix(jobId) {
     var data = await res.json();
     showCronToast(data.message || 'Fix request sent to AI agent');
   } catch(e) {
-    showCronToast('错误: ' + e.message);
+    showCronToast('Error: ' + e.message);
   }
 }
 
@@ -4785,7 +4785,7 @@ function startHealthStream() {
 async function loadSystemHealth() {
   try {
     var d = await fetch('/api/system-health').then(function(r) {
-      if (!r.ok) throw new 错误('HTTP ' + r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     });
     var services = Array.isArray(d.services) ? d.services : [];
@@ -4849,7 +4849,7 @@ async function loadSystemHealth() {
       + '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Runs</div></div>'
       + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary);border-radius:8px;text-align:center;border:1px solid var(--border-secondary);">'
       + '<div style="font-size:24px;font-weight:700;color:' + pctColor + ';">' + sa.successPct + '%</div>'
-      + '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">成功</div></div></div>';
+      + '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Success</div></div></div>';
     document.getElementById('sh-subagents').innerHTML = sahtml;
     return true;
   } catch(e) {
@@ -4911,7 +4911,7 @@ async function loadUsage() {
     document.getElementById('usage-month-cost').textContent = '≈ ' + fmtCost(data.monthCost);
 
     // Display cost warnings
-    displayCost警告s(data.warnings || []);
+    displayCostWarnings(data.warnings || []);
     
     // Display trend analysis
     displayTrendAnalysis(data.trend || {}, data);
@@ -4926,20 +4926,20 @@ async function loadUsage() {
     });
     document.getElementById('usage-chart').innerHTML = chartHtml;
     // Cost table
-    var usage信息Icon = document.getElementById('usage-cost-info-icon');
-    if (usage信息Icon) {
+    var usageInfoIcon = document.getElementById('usage-cost-info-icon');
+    if (usageInfoIcon) {
       if (data.billingSummary === 'likely_oauth_or_included' || data.billingSummary === 'mixed') {
-        usage信息Icon.style.display = '';
-        usage信息Icon.title = 'Equivalent if billed from token usage. OAuth/included models may be billed $0 at provider level.';
+        usageInfoIcon.style.display = '';
+        usageInfoIcon.title = 'Equivalent if billed from token usage. OAuth/included models may be billed $0 at provider level.';
       } else {
-        usage信息Icon.style.display = 'none';
-        usage信息Icon.title = '';
+        usageInfoIcon.style.display = 'none';
+        usageInfoIcon.title = '';
       }
     }
 
     var costLabel = data.source === 'otlp' ? 'Telemetry Cost' : 'Estimated Cost';
     var tableHtml = '<thead><tr><th>Period</th><th>Tokens</th><th>' + costLabel + '</th></tr></thead><tbody>';
-    tableHtml += '<tr><td>今天</td><td>' + fmtTokens(data.today) + '</td><td>' + fmtCost(data.todayCost) + '</td></tr>';
+    tableHtml += '<tr><td>Today</td><td>' + fmtTokens(data.today) + '</td><td>' + fmtCost(data.todayCost) + '</td></tr>';
     tableHtml += '<tr><td>This Week</td><td>' + fmtTokens(data.week) + '</td><td>' + fmtCost(data.weekCost) + '</td></tr>';
     tableHtml += '<tr><td>This Month</td><td>' + fmtTokens(data.month) + '</td><td>' + fmtCost(data.monthCost) + '</td></tr>';
     tableHtml += '</tbody>';
@@ -4973,7 +4973,7 @@ async function loadUsage() {
   }
 }
 
-function displayCost警告s(warnings) {
+function displayCostWarnings(warnings) {
   var container = document.getElementById('cost-warnings');
   if (!warnings || warnings.length === 0) {
     container.style.display = 'none';
@@ -5144,7 +5144,7 @@ async function loadMainActivity() {
     var dot = document.getElementById('main-activity-dot');
     var label = document.getElementById('main-activity-label');
     if (!data || !data.calls || data.calls.length === 0) {
-      el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">暂无活动</div>';
+      el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">No recent activity</div>';
       dot.style.background = '#888';
       label.textContent = 'No data';
       return;
@@ -5240,7 +5240,7 @@ function parseLogLine(line) {
     return {cls: cls, html: display};
   } catch(e) {
     var cls = 'msg';
-    if (line.includes('错误') || line.includes('failed')) cls = 'err';
+    if (line.includes('Error') || line.includes('failed')) cls = 'err';
     else if (line.includes('WARN')) cls = 'warn';
     else if (line.includes('run start') || line.includes('inbound')) cls = 'info';
     return {cls: cls, html: escHtml(line.substring(0, 300))};
@@ -5457,7 +5457,7 @@ function _animateParticleOn(pathId, svgId, color, duration, reverse) {
   var activeParticles = svg.querySelectorAll('circle[data-particle]').length;
   if (activeParticles > maxParticles) return;
   
-  var len = path.get总计Length();
+  var len = path.getTotalLength();
   var particle = getPooledParticle(false);
   particle.setAttribute('data-particle', 'true');
   particle.setAttribute('fill', color);
@@ -5594,7 +5594,7 @@ function triggerOutbound(ch) {
   setTimeout(function() { triggerInfraNetwork(); }, 200);
 }
 
-function trigger错误() {
+function triggerError() {
   var brain = document.getElementById('node-brain');
   if (!brain) return;
   var r = brain.querySelector('rect');
@@ -5649,7 +5649,7 @@ function processFlowEvent(line) {
     level = (obj.logLevelName || obj.level || (obj._meta && obj._meta.logLevelName) || '').toLowerCase();
   } catch(e) { msg = line.toLowerCase(); }
 
-  if (level === 'error' || level === 'fatal') { trigger错误(); return; }
+  if (level === 'error' || level === 'fatal') { triggerError(); return; }
 
   if (msg.includes('run start') && msg.includes('messagechannel')) {
     if (now - (flowThrottles['inbound']||0) < 500) return;
@@ -5883,7 +5883,7 @@ function _ovRenderCard(agent, idx) {
   var timeLabel = _ovTimeLabel(agent);
   var detailId = 'ovd2-' + idx;
   var isOpen = !!(window._ovExpandedSet || {})[agent.sessionId];
-  var tok总计 = (agent.inputTokens || 0) + (agent.outputTokens || 0);
+  var tokTotal = (agent.inputTokens || 0) + (agent.outputTokens || 0);
   var cmdsRun = (agent.recentTools || []).length;
 
   var h = '';
@@ -5912,7 +5912,7 @@ function _ovRenderCard(agent, idx) {
   h += '<div><span style="color:var(--text-muted);">Session:</span> <span style="font-family:monospace;font-size:10px;">' + escHtml(agent.sessionId) + '</span></div>';
   h += '<div><span style="color:var(--text-muted);">Key:</span> <span style="font-family:monospace;font-size:10px;">' + escHtml(agent.key) + '</span></div>';
   h += '<div><span style="color:var(--text-muted);">Model:</span> ' + escHtml(agent.model || 'unknown') + '</div>';
-  if (tok总计 > 0) h += '<div><span style="color:var(--text-muted);">Tokens:</span> ' + tok总计.toLocaleString() + ' (' + (agent.inputTokens||0).toLocaleString() + ' in / ' + (agent.outputTokens||0).toLocaleString() + ' out)</div>';
+  if (tokTotal > 0) h += '<div><span style="color:var(--text-muted);">Tokens:</span> ' + tokTotal.toLocaleString() + ' (' + (agent.inputTokens||0).toLocaleString() + ' in / ' + (agent.outputTokens||0).toLocaleString() + ' out)</div>';
   if (cmdsRun > 0) h += '<div><span style="color:var(--text-muted);">Commands run:</span> ' + cmdsRun + '</div>';
   if (agent.recentTools && agent.recentTools.length > 0) {
     h += '<div style="margin-top:6px;"><span style="color:var(--text-muted);">Recent tools:</span></div>';
@@ -6314,7 +6314,7 @@ function loadTelegramMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="tg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="tg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     html += '<div class="tg-chat">';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:20px;color:var(--text-muted);">No messages found</div>';
@@ -6351,7 +6351,7 @@ function loadMoreTelegram() {
     // Re-render with all data
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="tg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="tg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     html += '<div class="tg-chat">';
     msgs.forEach(function(m) {
       var dir = m.direction === 'in' ? 'in' : 'out';
@@ -6377,7 +6377,7 @@ function loadIMessageMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="imsg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="imsg-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     html += '<div class="imsg-chat">';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:20px;color:var(--text-muted);">No messages found</div>';
@@ -6411,7 +6411,7 @@ function loadWhatsAppMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="wa-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="wa-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     html += '<div class="wa-chat">';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:20px;color:var(--text-muted);">No WhatsApp messages found</div>';
@@ -6445,7 +6445,7 @@ function loadSignalMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="sig-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="sig-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     html += '<div class="sig-chat">';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:20px;color:var(--text-muted);">No Signal messages found</div>';
@@ -6524,7 +6524,7 @@ function loadDiscordMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="discord-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="discord-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     // Show guild/channel info if available
     var guilds = data.guilds || [];
     var channels = data.channels || [];
@@ -6568,7 +6568,7 @@ function loadSlackMessages(isRefresh) {
     if (!isCompModalActive(expectedNodeId)) return;
     var msgs = data.messages || [];
     var body = document.getElementById('comp-modal-body');
-    var html = '<div class="slack-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天</span></div>';
+    var html = '<div class="slack-stats"><span class="in">📥 ' + (data.todayIn || 0) + ' incoming</span><span class="out">📤 ' + (data.todayOut || 0) + ' outgoing</span><span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today</span></div>';
     var workspaces = data.workspaces || [];
     var channels = data.channels || [];
     if (workspaces.length || channels.length) {
@@ -6616,7 +6616,7 @@ function loadGenericChannelData(nodeId, chKey, comp, isRefresh) {
     var html = '<div class="tg-stats">'
       + '<span class="in">📥 ' + todayIn + ' incoming</span>'
       + '<span class="out">📤 ' + todayOut + ' outgoing</span>'
-      + '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">' + escapeHtml(status) + ' · 今天</span>'
+      + '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">' + escapeHtml(status) + ' · Today</span>'
       + '</div>';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:32px;color:var(--text-muted);">'
@@ -6812,7 +6812,7 @@ function loadGoogleChatMessages(isRefresh) {
     var html = '<div class="gc-stats">'
       + '<span class="in">📥 ' + todayIn + ' incoming</span>'
       + '<span class="out">📤 ' + todayOut + ' outgoing</span>'
-      + (spaces.length ? '<span style="margin-left:auto;color:#1a73e8;font-size:11px;">🏢 ' + escapeHtml(spaces.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天 · Google Chat</span>')
+      + (spaces.length ? '<span style="margin-left:auto;color:#1a73e8;font-size:11px;">🏢 ' + escapeHtml(spaces.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today · Google Chat</span>')
       + '</div>';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:32px;color:var(--text-muted);">'
@@ -6857,7 +6857,7 @@ function loadMSTeamsMessages(isRefresh) {
     var html = '<div class="mst-stats">'
       + '<span class="in">📥 ' + todayIn + ' incoming</span>'
       + '<span class="out">📤 ' + todayOut + ' outgoing</span>'
-      + (teams.length ? '<span style="margin-left:auto;color:#6264A7;font-size:11px;">👥 ' + escapeHtml(teams.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天 · MS Teams</span>')
+      + (teams.length ? '<span style="margin-left:auto;color:#6264A7;font-size:11px;">👥 ' + escapeHtml(teams.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today · MS Teams</span>')
       + '</div>';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:32px;color:var(--text-muted);">'
@@ -6902,7 +6902,7 @@ function loadMattermostMessages(isRefresh) {
     var html = '<div class="mm-stats">'
       + '<span class="in">📥 ' + todayIn + ' incoming</span>'
       + '<span class="out">📤 ' + todayOut + ' outgoing</span>'
-      + (channels.length ? '<span style="margin-left:auto;color:#0058CC;font-size:11px;"># ' + escapeHtml(channels.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">今天 · Mattermost</span>')
+      + (channels.length ? '<span style="margin-left:auto;color:#0058CC;font-size:11px;"># ' + escapeHtml(channels.join(', ')) + '</span>' : '<span style="margin-left:auto;color:var(--text-muted);font-size:11px;">Today · Mattermost</span>')
       + '</div>';
     if (msgs.length === 0) {
       html += '<div style="text-align:center;padding:32px;color:var(--text-muted);">'
@@ -6959,7 +6959,7 @@ function loadBrainData(isRefresh) {
 
     // Stats cards 2x2
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">';
-    html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px 14px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-top:2px;">今天\'s Calls</div></div>';
+    html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px 14px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-top:2px;">Today\'s Calls</div></div>';
     html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px 14px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + fmtTok + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-top:2px;">Tokens</div></div>';
     var costColor = parseFloat((s.today_cost||'$0').replace('$','')) > 50 ? '#f59e0b' : parseFloat((s.today_cost||'$0').replace('$','')) > 100 ? '#ef4444' : '#22c55e';
     html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px 14px;text-align:center;"><div style="font-size:24px;font-weight:700;color:' + costColor + ';">' + (s.today_cost||'$0.00') + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-top:2px;">Cost</div></div>';
@@ -6979,11 +6979,11 @@ function loadBrainData(isRefresh) {
 
     // Token breakdown bar
     var tIn = tok.input||0, tOut = tok.output||0, tCR = tok.cache_read||0;
-    var t总计 = tIn+tOut+tCR || 1;
+    var tTotal = tIn+tOut+tCR || 1;
     html += '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:16px;background:var(--bg-secondary);">';
-    html += '<div style="width:' + (tIn/t总计*100) + '%;background:#3b82f6;" title="Input: ' + tIn + '"></div>';
-    html += '<div style="width:' + (tOut/t总计*100) + '%;background:#8b5cf6;" title="Output: ' + tOut + '"></div>';
-    html += '<div style="width:' + (tCR/t总计*100) + '%;background:#22c55e;" title="Cache Read: ' + tCR + '"></div>';
+    html += '<div style="width:' + (tIn/tTotal*100) + '%;background:#3b82f6;" title="Input: ' + tIn + '"></div>';
+    html += '<div style="width:' + (tOut/tTotal*100) + '%;background:#8b5cf6;" title="Output: ' + tOut + '"></div>';
+    html += '<div style="width:' + (tCR/tTotal*100) + '%;background:#22c55e;" title="Cache Read: ' + tCR + '"></div>';
     html += '</div>';
     html += '<div style="display:flex;gap:12px;font-size:10px;color:var(--text-muted);margin-bottom:14px;justify-content:center;">';
     html += '<span>🔵 Input</span><span>🟣 Output</span><span>🟢 Cache Read</span>';
@@ -7055,7 +7055,7 @@ function loadCostOptimizerData(isRefresh) {
     html += '<div class="cost-overview">';
     html += '<div class="cost-overview-header">💰 Cost Overview</div>';
     html += '<div class="cost-overview-row">';
-    html += '<div class="cost-overview-item"><span class="cost-overview-label">今天</span><span class="cost-overview-value">$' + todayCost.toFixed(3) + '</span></div>';
+    html += '<div class="cost-overview-item"><span class="cost-overview-label">Today</span><span class="cost-overview-value">$' + todayCost.toFixed(3) + '</span></div>';
     html += '<div class="cost-overview-item"><span class="cost-overview-label">Month Projected</span><span class="cost-overview-value">$' + monthCost.toFixed(2) + '</span></div>';
     html += '</div>';
     if (data.potentialSavings) {
@@ -7412,8 +7412,8 @@ function loadGatewayData(isRefresh) {
     html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text-primary);">' + (s.today_messages||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Messages</div></div>';
     html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text-primary);">' + (s.today_heartbeats||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Heartbeats</div></div>';
     html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text-primary);">' + (s.today_crons||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Cron</div></div>';
-    html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:' + ((s.today_errors||0) > 0 ? 'var(--text-error)' : 'var(--text-primary)') + ';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
-    html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#3b82f6;">' + (s.active_sessions||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">活跃会话</div></div>';
+    html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:' + ((s.today_errors||0) > 0 ? 'var(--text-error)' : 'var(--text-primary)') + ';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
+    html += '<div style="flex:1;min-width:70px;background:var(--bg-secondary);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#3b82f6;">' + (s.active_sessions||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Active Sessions</div></div>';
     html += '</div>';
 
     // Config summary & uptime
@@ -7539,7 +7539,7 @@ function loadToolData(toolKey, comp, isRefresh) {
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#22c55e;">' + active + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Active</div></div>';
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#f59e0b;">' + idle + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Idle</div></div>';
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#ef4444;">' + stale + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Stale</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Calls 今天</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Calls Today</div></div>';
       html += '</div>';
 
       if (agents.length > 0) {
@@ -7577,8 +7577,8 @@ function loadToolData(toolKey, comp, isRefresh) {
       var running = data.running_commands || [];
       html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#f59e0b;">' + running.length + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Running</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">总计 今天</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Total Today</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
       html += '</div>';
 
       if (running.length > 0) {
@@ -7619,9 +7619,9 @@ function loadToolData(toolKey, comp, isRefresh) {
     } else if (toolKey === 'browser') {
       var urls = data.recent_urls || [];
       html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Actions 今天</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Actions Today</div></div>';
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#6A1B9A;">' + urls.length + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">URLs Visited</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
       html += '</div>';
 
       if (urls.length > 0) {
@@ -7659,8 +7659,8 @@ function loadToolData(toolKey, comp, isRefresh) {
     // ─── SEARCH MODAL ──────────────────────────────────
     } else if (toolKey === 'search') {
       html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Searches 今天</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Searches Today</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
       html += '</div>';
 
       if (events.length > 0) {
@@ -7674,7 +7674,7 @@ function loadToolData(toolKey, comp, isRefresh) {
           html += '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px;">' + ts + '</span>';
           html += '</div>';
           if (evt.result_count !== undefined) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + evt.result_count + ' results returned</div>';
-          if (evt.status === 'error') html += '<div style="font-size:11px;color:#ef4444;margin-top:2px;">✗ 错误</div>';
+          if (evt.status === 'error') html += '<div style="font-size:11px;color:#ef4444;margin-top:2px;">✗ Error</div>';
           html += '</div>';
         });
         html += '</div>';
@@ -7690,7 +7690,7 @@ function loadToolData(toolKey, comp, isRefresh) {
       var cronOk = jobs.filter(function(j){return j.lastStatus!=='error';}).length;
       var cronErr = jobs.filter(function(j){return j.lastStatus==='error';}).length;
       html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#22c55e;">' + cronOk + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Healthy</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+(cronErr>0?'#ef4444':'var(--text-primary)')+';">' + cronErr + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+(cronErr>0?'#ef4444':'var(--text-primary)')+';">' + cronErr + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
       html += '</div>';
 
       if (jobs.length > 0) {
@@ -7711,7 +7711,7 @@ function loadToolData(toolKey, comp, isRefresh) {
           if (j.nextRun) meta.push('Next: ' + _fmtToolDate(j.nextRun));
           if (j.channel) meta.push('→ ' + j.channel);
           if (meta.length) html += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">' + escapeHtml(meta.join(' · ')) + '</div>';
-          if (isErr && j.last错误) html += '<div style="font-size:11px;color:#ef4444;margin-top:4px;background:#ef444411;padding:4px 8px;border-radius:4px;">' + escapeHtml((j.last错误||'').substring(0,200)) + '</div>';
+          if (isErr && j.lastError) html += '<div style="font-size:11px;color:#ef4444;margin-top:4px;background:#ef444411;padding:4px 8px;border-radius:4px;">' + escapeHtml((j.lastError||'').substring(0,200)) + '</div>';
           html += '</div>';
         });
         html += '</div>';
@@ -7725,8 +7725,8 @@ function loadToolData(toolKey, comp, isRefresh) {
     // ─── TTS MODAL ─────────────────────────────────────
     } else if (toolKey === 'tts') {
       html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Generations 今天</div></div>';
-      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">错误s</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--text-primary);">' + (s.today_calls||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Generations Today</div></div>';
+      html += '<div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:24px;font-weight:700;color:'+ ((s.today_errors||0)>0?'#ef4444':'var(--text-primary)') +';">' + (s.today_errors||0) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Errors</div></div>';
       html += '</div>';
 
       if (events.length > 0) {
@@ -7795,7 +7795,7 @@ function loadToolData(toolKey, comp, isRefresh) {
     // ─── FALLBACK ──────────────────────────────────────
     } else {
       html += '<div style="display:flex;gap:12px;padding:10px 16px;background:' + color + '22;border-radius:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">';
-      html += '<span style="font-size:13px;font-weight:600;color:' + color + ';">今天: ' + (s.today_calls||0) + ' calls</span>';
+      html += '<span style="font-size:13px;font-weight:600;color:' + color + ';">Today: ' + (s.today_calls||0) + ' calls</span>';
       if (s.today_errors > 0) html += '<span style="font-size:13px;font-weight:600;color:#ef4444;">| ' + s.today_errors + ' errors</span>';
       html += '</div>';
       html += _renderEventList(events, toolKey, color);
@@ -7914,7 +7914,7 @@ async function loadModalTranscript() {
     var r = await fetch('/api/transcript-events/' + encodeURIComponent(_modalSessionId));
     var data = await r.json();
     if (data.error) {
-      document.getElementById('modal-content').innerHTML = '<div style="padding:20px;color:var(--text-error);">错误: ' + escHtml(data.error) + '</div>';
+      document.getElementById('modal-content').innerHTML = '<div style="padding:20px;color:var(--text-error);">Error: ' + escHtml(data.error) + '</div>';
       return;
     }
     _modalEvents = data.events || [];
@@ -8213,7 +8213,7 @@ function _destroyChart(chart) {
 async function loadHistory() {
   var p = _getHistoryParams();
   var status = document.getElementById('history-status');
-  status.textContent = '加载中...';
+  status.textContent = 'Loading...';
 
   try {
     // Fetch token metrics
@@ -8249,7 +8249,7 @@ async function loadHistory() {
       type: 'line',
       data: {
         datasets: [
-          { label: '总计 Cost ($)', data: costPts, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 1 }
+          { label: 'Total Cost ($)', data: costPts, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 1 }
         ]
       },
       options: _chartOpts('Cost', 'USD')
@@ -8290,7 +8290,7 @@ async function loadHistory() {
     var totalPts = (tokIn.data||[]).length + (costData.data||[]).length;
     status.textContent = totalPts > 0 ? totalPts + ' data points' : 'No data yet — collector polls every 60s';
   } catch(e) {
-    status.textContent = '错误: ' + e.message;
+    status.textContent = 'Error: ' + e.message;
     console.error('History load error:', e);
   }
 }
@@ -8326,13 +8326,13 @@ async function showSnapshot(ts) {
           <div class="time-slider" id="time-slider" onclick="onTimeSliderClick(event)">
             <div class="time-slider-thumb" id="time-slider-thumb"></div>
           </div>
-          <div class="time-display" id="time-display">加载中...</div>
+          <div class="time-display" id="time-display">Loading...</div>
         </div>
         <div class="time-nav-btn" onclick="timeTravel('next-day')" title="Next day">›</div>
         <div class="time-nav-btn" onclick="timeTravel('now')" title="Back to now">⏹</div>
       </div>
     </div>
-    <div class="comp-modal-body" id="comp-modal-body">加载中...</div>
+    <div class="comp-modal-body" id="comp-modal-body">Loading...</div>
     <div class="comp-modal-footer" id="comp-modal-footer">Last updated: —</div>
   </div>
 </div>
@@ -8355,7 +8355,7 @@ async function showSnapshot(ts) {
       <div class="modal-tab" onclick="switchModalTab('narrative')">Narrative</div>
       <div class="modal-tab" onclick="switchModalTab('full')">Full Logs</div>
     </div>
-    <div class="modal-content" id="modal-content">加载中...</div>
+    <div class="modal-content" id="modal-content">Loading...</div>
     <div class="modal-footer">
       <span id="modal-event-count">—</span>
       <span id="modal-msg-count">—</span>
@@ -8368,12 +8368,12 @@ async function showSnapshot(ts) {
   <div style="background:var(--bg-secondary, #1a1a2e); border:1px solid var(--border-primary, #333); border-radius:16px; padding:40px; max-width:440px; width:90%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5); position:relative;">
     <button id="gw-setup-close" onclick="document.getElementById('gw-setup-overlay').style.display='none'" style="display:none; position:absolute; top:12px; right:16px; background:none; border:none; color:var(--text-muted, #888); font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
     <div style="font-size:48px; margin-bottom:16px;">🦞</div>
-    <h2 style="color:var(--text-primary, #fff); margin:0 0 8px; font-size:24px; font-weight:700;">ClawMetry 设置</h2>
-    <p style="color:var(--text-muted, #888); margin:0 0 24px; font-size:14px;">输入您的 OpenClaw 网关令牌 to connect.</p>
+    <h2 style="color:var(--text-primary, #fff); margin:0 0 8px; font-size:24px; font-weight:700;">ClawMetry Setup</h2>
+    <p style="color:var(--text-muted, #888); margin:0 0 24px; font-size:14px;">Enter your OpenClaw gateway token to connect.</p>
     <input id="gw-token-input" type="password" placeholder="Paste your gateway token" 
       style="width:100%; padding:12px 16px; border:1px solid var(--border-primary, #444); border-radius:8px; background:var(--bg-primary, #111); color:var(--text-primary, #fff); font-size:14px; font-family:monospace; box-sizing:border-box; outline:none; margin-bottom:8px;"
       onkeydown="if(event.key==='Enter')gwSetupConnect()">
-    <p id="gw-setup-hint" style="color:var(--text-muted, #888); font-size:12px; margin:0 0 4px; text-align:left;">查找方法: <code style="color:var(--text-accent, #0af); background:rgba(0,170,255,0.1); padding:2px 6px; border-radius:4px;">docker exec $(docker ps -q) env | grep TOKEN</code> or <code style="color:var(--text-accent, #0af); background:rgba(0,170,255,0.1); padding:2px 6px; border-radius:4px;">gateway.auth.token</code></p>
+    <p id="gw-setup-hint" style="color:var(--text-muted, #888); font-size:12px; margin:0 0 4px; text-align:left;">Find it: <code style="color:var(--text-accent, #0af); background:rgba(0,170,255,0.1); padding:2px 6px; border-radius:4px;">docker exec $(docker ps -q) env | grep TOKEN</code> or <code style="color:var(--text-accent, #0af); background:rgba(0,170,255,0.1); padding:2px 6px; border-radius:4px;">gateway.auth.token</code></p>
     <p id="gw-url-hint" style="color:var(--text-muted, #666); font-size:11px; margin:0 0 16px; text-align:left;">Optional: <input id="gw-url-input" type="text" placeholder="http://localhost:18789 (auto-detected)" style="width:70%; padding:4px 8px; border:1px solid var(--border-primary, #444); border-radius:4px; background:var(--bg-primary, #111); color:var(--text-primary, #fff); font-size:11px; font-family:monospace;"></p>
     <div id="gw-setup-error" style="color:#ff4444; font-size:13px; margin-bottom:12px; display:none;"></div>
     <div id="gw-setup-status" style="color:var(--text-accent, #0af); font-size:13px; margin-bottom:12px; display:none;"></div>
@@ -8442,7 +8442,7 @@ async function gwSetupConnect() {
     const d = await r.json();
     if (d.ok) {
       statusEl.textContent = 'Connected to ' + d.url;
-      btn.textContent = '连接成功!';
+      btn.textContent = 'Connected!';
       localStorage.setItem('clawmetry-gw-token', token);
       localStorage.setItem('clawmetry-token', token);
       updateGwStatus(true, d.url);
@@ -8521,7 +8521,7 @@ def _gw_ws_connect(url=None, token=None):
     global _ws_client, _ws_connected
     try:
         import websocket
-    except Import错误:
+    except ImportError:
         return False
 
     cfg = _load_gw_config()
@@ -8813,7 +8813,7 @@ def _auto_discover_gateway(token):
     if env_port:
         try:
             common_ports.insert(0, int(env_port))
-        except Value错误:
+        except ValueError:
             pass
     # Add ports from config files
     for cfg_name in ['moltbot.json', 'clawdbot.json', 'openclaw.json']:
@@ -9456,7 +9456,7 @@ def api_logs():
                                     lines.append(line.strip())
                             else:
                                 lines.append(line.strip())
-                        except (json.JSONDecode错误, Value错误):
+                        except (json.JSONDecodeError, ValueError):
                             lines.append(line.strip())
                 lines = lines[-lines_count:]
             except Exception:
@@ -9657,11 +9657,11 @@ async function load() {
   allNodes = d.nodes || [];
   const s = d.fleet_summary || {};
   document.getElementById('summary').innerHTML = `
-    <div class="stat-card"><div class="label">总计 Nodes</div><div class="value blue">${s.total_nodes||0}</div></div>
+    <div class="stat-card"><div class="label">Total Nodes</div><div class="value blue">${s.total_nodes||0}</div></div>
     <div class="stat-card"><div class="label">Online</div><div class="value green">${s.online||0}</div></div>
     <div class="stat-card"><div class="label">Offline</div><div class="value red">${s.offline||0}</div></div>
-    <div class="stat-card"><div class="label">Cost 今天</div><div class="value">$${(s.total_cost_today||0).toFixed(2)}</div></div>
-    <div class="stat-card"><div class="label">Sessions 今天</div><div class="value">${s.total_sessions_today||0}</div></div>
+    <div class="stat-card"><div class="label">Cost Today</div><div class="value">$${(s.total_cost_today||0).toFixed(2)}</div></div>
+    <div class="stat-card"><div class="label">Sessions Today</div><div class="value">${s.total_sessions_today||0}</div></div>
   `;
   renderNodes(allNodes);
 }
@@ -9681,8 +9681,8 @@ function renderNodes(nodes) {
       <div class="top"><div class="name">${esc(n.name||n.node_id)}</div><div class="status ${n.status}">${n.status}</div></div>
       <div class="meta">${esc(n.hostname||'')} - last seen ${ago}</div>
       <div class="metrics">
-        <div class="metric"><div class="ml">Cost 今天</div><div class="mv">$${cost}</div></div>
-        <div class="metric"><div class="ml">会话</div><div class="mv">${sessions}</div></div>
+        <div class="metric"><div class="ml">Cost Today</div><div class="mv">$${cost}</div></div>
+        <div class="metric"><div class="ml">Sessions</div><div class="mv">${sessions}</div></div>
         <div class="metric"><div class="ml">Model</div><div class="mv">${esc(model)}</div></div>
         <div class="metric"><div class="ml">Disk</div><div class="mv">${disk}</div></div>
       </div>
@@ -10433,7 +10433,7 @@ def api_usage():
                                 # Track session costs
                                 session_cost += total_cost
                                 
-                        except (json.JSONDecode错误, Value错误, Key错误):
+                        except (json.JSONDecodeError, ValueError, KeyError):
                             continue
                             
                 # Store session cost
@@ -10554,7 +10554,7 @@ def api_usage_export():
                                     day = dt.strftime('%Y-%m-%d')
                                     if tokens > 0:
                                         daily_tokens[day] = daily_tokens.get(day, 0) + tokens
-                                except (json.JSONDecode错误, Value错误):
+                                except (json.JSONDecodeError, ValueError):
                                     pass
                     except Exception:
                         pass
@@ -10690,7 +10690,7 @@ def api_transcript(session_id):
                         messages.append({
                             'role': role, 'content': content, 'timestamp': ts_ms,
                         })
-                except (json.JSONDecode错误, Value错误):
+                except (json.JSONDecodeError, ValueError):
                     pass
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -10733,7 +10733,7 @@ def api_transcript_events(session_id):
             for line in f:
                 try:
                     obj = json.loads(line.strip())
-                except (json.JSONDecode错误, Value错误):
+                except (json.JSONDecodeError, ValueError):
                     continue
 
                 ts = obj.get('timestamp') or obj.get('time') or obj.get('created_at')
@@ -11029,7 +11029,7 @@ def api_subagent_activity(session_id):
                                     'type': 'tool_result',
                                     'ts': ts,
                                     'preview': result_text,
-                                    'is错误': block.get('is_error', False),
+                                    'isError': block.get('is_error', False),
                                 })
                             elif btype == 'text' and role == 'assistant':
                                 text = block.get('text', '').strip()
@@ -11115,7 +11115,7 @@ def api_channel_telegram():
                     continue
                 try:
                     obj = json.loads(line)
-                except json.JSONDecode错误:
+                except json.JSONDecodeError:
                     continue
                 msg1 = obj.get('1', '') or obj.get('0', '')
                 ts = obj.get('time', '') or (obj.get('_meta', {}) or {}).get('date', '')
@@ -11163,7 +11163,7 @@ def api_channel_telegram():
                                 continue
                             try:
                                 sd = json.loads(sline)
-                            except json.JSONDecode错误:
+                            except json.JSONDecodeError:
                                 continue
                             sm = sd.get('message', {})
                             if sm.get('role') == 'user':
@@ -11222,7 +11222,7 @@ def api_channel_telegram():
                             continue
                         try:
                             sd = json.loads(sline)
-                        except json.JSONDecode错误:
+                        except json.JSONDecodeError:
                             continue
                         sm = sd.get('message', {})
                         ts = sd.get('timestamp', '')
@@ -11405,7 +11405,7 @@ def api_channel_whatsapp():
                     continue
                 try:
                     obj = json.loads(line)
-                except json.JSONDecode错误:
+                except json.JSONDecodeError:
                     continue
                 msg1 = obj.get('1', '') or obj.get('0', '')
                 msg0 = obj.get('0', '')
@@ -11490,7 +11490,7 @@ def api_channel_signal():
                     continue
                 try:
                     obj = json.loads(line)
-                except json.JSONDecode错误:
+                except json.JSONDecodeError:
                     continue
                 msg1 = obj.get('1', '') or obj.get('0', '')
                 msg0 = obj.get('0', '')
@@ -12418,7 +12418,7 @@ def api_component_tool(name):
                     for line in f:
                         try:
                             obj = json.loads(line.strip())
-                        except json.JSONDecode错误:
+                        except json.JSONDecodeError:
                             continue
 
                         if obj.get('type') != 'message':
@@ -12474,7 +12474,7 @@ def api_component_tool(name):
                             if not ts.startswith(today):
                                 continue
                             details = msg.get('details', {})
-                            is_error = msg.get('is错误', False) or (isinstance(details, dict) and details.get('status') == 'error')
+                            is_error = msg.get('isError', False) or (isinstance(details, dict) and details.get('status') == 'error')
                             if is_error:
                                 today_errors += 1
                                 # Mark last matching event as error
@@ -12605,7 +12605,7 @@ def api_component_tool(name):
                     'lastRun': cj.get('lastRun') or cj.get('lastRunAt', ''),
                     'nextRun': cj.get('nextRun') or cj.get('nextRunAt', ''),
                     'lastStatus': cj.get('lastStatus', 'ok'),
-                    'last错误': cj.get('last错误', ''),
+                    'lastError': cj.get('lastError', ''),
                 })
         except Exception:
             result['cron_jobs'] = []
@@ -12743,7 +12743,7 @@ def api_component_gateway():
                     continue
                 try:
                     entry = json.loads(line)
-                except json.JSONDecode错误:
+                except json.JSONDecodeError:
                     continue
 
                 msg = entry.get('1', '') or entry.get('0', '')
@@ -12919,7 +12919,7 @@ def api_component_brain():
                     for line in f:
                         try:
                             obj = json.loads(line.strip())
-                        except json.JSONDecode错误:
+                        except json.JSONDecodeError:
                             continue
 
                         # Check session header for subagent hints
@@ -13526,7 +13526,7 @@ def api_cost_optimization():
         return jsonify({
             'costs': {'today': 0, 'week': 0, 'month': 0, 'projected': 0},
             'localModels': {'available': False, 'count': 0, 'models': []},
-            'recommendations': [{'title': 'API 错误', 'description': str(e), 'priority': 'low'}],
+            'recommendations': [{'title': 'API Error', 'description': str(e), 'priority': 'low'}],
             'expensiveOps': [],
             'llmfit': {'available': False, 'recommendations': [], 'codingModels': [], 'chatModels': [], 'system': {}},
             'ollamaInstalled': False,
@@ -13892,7 +13892,7 @@ def _generate_cost_recommendations(costs, local_models):
     if costs['today'] > 1.0:
         recommendations.append({
             'title': 'High Daily Cost',
-            'description': f"今天's usage (${costs['today']:.3f}) is high. Consider using local models for routine tasks.",
+            'description': f"Today's usage (${costs['today']:.3f}) is high. Consider using local models for routine tasks.",
             'priority': 'high',
             'action': 'Review recent expensive operations below'
         })
@@ -14320,7 +14320,7 @@ def _is_pid_running(pid):
     try:
         os.kill(pid, 0)
         return True
-    except (ProcessLookup错误, Permission错误):
+    except (ProcessLookupError, PermissionError):
         return False
 
 
@@ -14382,7 +14382,7 @@ def _get_service_pid():
                     if len(parts) >= 1:
                         try:
                             return int(parts[0])
-                        except Value错误:
+                        except ValueError:
                             pass
         except Exception:
             pass
@@ -14471,7 +14471,7 @@ def _build_plist(python_exe, script_path, port, host, log_path='/tmp/clawmetry.l
     <true/>
     <key>StandardOutPath</key>
     <string>{log_path}</string>
-    <key>Standard错误Path</key>
+    <key>StandardErrorPath</key>
     <string>{log_path}</string>
 </dict>
 </plist>
@@ -14690,7 +14690,7 @@ def cmd_connect(args):
     print()
     try:
         token = input("  Paste your API key: ").strip()
-    except (KeyboardInterrupt, EOF错误):
+    except (KeyboardInterrupt, EOFError):
         print("\nCancelled.")
         sys.exit(0)
 
@@ -14700,7 +14700,7 @@ def cmd_connect(args):
 
     _write_cloud_token(token)
     print()
-    print("✅ 连接成功! View your agent at: https://app.clawmetry.com")
+    print("✅ Connected! View your agent at: https://app.clawmetry.com")
     print()
 
 
@@ -14745,7 +14745,7 @@ def _run_server(args):
             name, port_str = svc_spec.rsplit(':', 1)
             try:
                 EXTRA_SERVICES.append({'name': name.strip(), 'port': int(port_str.strip())})
-            except Value错误:
+            except ValueError:
                 print(f"⚠️  Invalid --monitor-service format: {svc_spec} (expected NAME:PORT)")
         else:
             print(f"⚠️  Invalid --monitor-service format: {svc_spec} (expected NAME:PORT)")
@@ -14768,7 +14768,7 @@ def _run_server(args):
         if env_sse_max:
             try:
                 sse_max = int(env_sse_max)
-            except Value错误:
+            except ValueError:
                 sse_max = None
     if sse_max is not None and sse_max > 0:
         SSE_MAX_SECONDS = sse_max
@@ -14847,7 +14847,7 @@ def _run_server(args):
         try:
             from waitress import serve
             serve(app, host=args.host, port=args.port, threads=8)
-        except Import错误:
+        except ImportError:
             # Waitress not installed — fall back to Flask with warning suppressed
             import logging
             log = logging.getLogger('werkzeug')
